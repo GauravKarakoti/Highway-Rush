@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 180" width="100%" height="100%">
+  <defs>
+    <!-- Brushed Aluminum Surface Gradient -->
+    <linearGradient id="metal-base" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e2e8f0" />
+      <stop offset="25%" stop-color="#cbd5e1" />
+      <stop offset="50%" stop-color="#f8fafc" />
+      <stop offset="75%" stop-color="#94a3b8" />
+      <stop offset="100%" stop-color="#64748b" />
+    </linearGradient>
+
+    <!-- Beveled Edge Gradient -->
+    <linearGradient id="metal-edge" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="40%" stop-color="#94a3b8" />
+      <stop offset="100%" stop-color="#334155" />
+    </linearGradient>
+
+    <!-- Rubber Stud Gradient -->
+    <radialGradient id="rubber-stud" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#334155" />
+      <stop offset="60%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#020617" />
+    </radialGradient>
+
+    <!-- Chrome Bolt Gradient -->
+    <radialGradient id="chrome-bolt" cx="30%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="50%" stop-color="#94a3b8" />
+      <stop offset="100%" stop-color="#334155" />
+    </radialGradient>
+
+    <!-- Red Brake Accent Glow -->
+    <linearGradient id="brake-glow" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ef4444" />
+      <stop offset="50%" stop-color="#f87171" />
+      <stop offset="100%" stop-color="#dc2626" />
+    </linearGradient>
+
+    <filter id="drop-shadow" x="-20%" y="-20%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#000000" flood-opacity="0.75" />
+    </filter>
+
+    <filter id="inner-shadow">
+      <feOffset dx="0" dy="2" />
+      <feGaussianBlur stdDeviation="1.5" result="offset-blur" />
+      <feComposite operator="out" in="SourceGraphic" in2="offset-blur" result="inverse" />
+      <feFlood flood-color="black" flood-opacity="0.8" result="color" />
+      <feComposite operator="in" in="color" in2="inverse" result="shadow" />
+      <feComposite operator="over" in="shadow" in2="SourceGraphic" />
+    </filter>
+  </defs>
+
+  <!-- Pedal Arm Connecting to Bulkhead -->
+  <path d="M 66,0 L 94,0 L 88,40 L 72,40 Z" fill="#1e293b" stroke="#0f172a" stroke-width="2" />
+  <rect x="70" y="10" width="20" height="3" fill="#475569" />
+  <rect x="70" y="22" width="20" height="3" fill="#475569" />
+
+  <!-- Main Pedal Plate with Drop Shadow -->
+  <g filter="url(#drop-shadow)">
+    <!-- Base Outer Metal Plate -->
+    <rect x="15" y="32" width="130" height="136" rx="16" ry="16" fill="url(#metal-edge)" />
+    <!-- Beveled Inset Plate -->
+    <rect x="18" y="35" width="124" height="130" rx="14" ry="14" fill="url(#metal-base)" stroke="#ffffff" stroke-width="1.5" />
+
+    <!-- Brushed Texture Subtle Lines -->
+    <line x1="22" y1="52" x2="138" y2="52" stroke="#ffffff" stroke-opacity="0.4" stroke-width="1" />
+    <line x1="22" y1="74" x2="138" y2="74" stroke="#475569" stroke-opacity="0.2" stroke-width="1" />
+    <line x1="22" y1="96" x2="138" y2="96" stroke="#ffffff" stroke-opacity="0.3" stroke-width="1" />
+    <line x1="22" y1="118" x2="138" y2="118" stroke="#475569" stroke-opacity="0.2" stroke-width="1" />
+    <line x1="22" y1="140" x2="138" y2="140" stroke="#ffffff" stroke-opacity="0.3" stroke-width="1" />
+
+    <!-- Anti-Slip Rubber Grip Studs (3 columns x 4 rows) -->
+    <!-- Row 1 -->
+    <rect x="30" y="46" width="24" height="16" rx="4" fill="url(#rubber-stud)" stroke="#475569" stroke-width="1" filter="url(#inner-shadow)" />
+    <rect x="68" y="46" width="24" height="16" rx="4" fill="url(#rubber-stud)" stroke="#475569" stroke-width="1" filter="url(#inner-shadow)" />
+    <rect x="106" y="46" width="24" height="16" rx="4" fill="url(#rubber-stud)" stroke="#475569" stroke-width="1" filter="url(#inner-shadow)" />
+
+    <!-- Row 2 -->
+    <rect x="30" y="72" width="24" height="16" rx="4" fill="url(#rubber-stud)" stroke="#475569" stroke-width="1" filter="url(#inner-shadow)" />
+    <rect x="68" y="72" width="24" height="16" rx="4" fill="url(#rubber-stud)" stroke="#475569" stroke-width="1" filter="url(#inner-shadow)" />
+    <rect x="106" y="72" width="24" height="16" rx="4" fill="url(#rubber-stud)" stroke="#475569" stroke-width="1" filter="url(#inner-shadow)" />
+
+    <!-- Center Engraved Brand / STOP Bar -->
+    <rect x="28" y="96" width="104" height="18" rx="3" fill="#1e293b" />
+    <rect x="30" y="98" width="100" height="14" rx="2" fill="url(#brake-glow)" />
+    <text x="80" y="109" font-family="'Arial Black', sans-serif" font-weight="900" font-size="10" fill="#ffffff" text-anchor="middle" letter-spacing="2">BRAKE</text>
+
+    <!-- Row 3 -->
+    <rect x="30" y="122" width="24" height="16" rx="4" fill="url(#rubber-stud)" stroke="#475569" stroke-width="1" filter="url(#inner-shadow)" />
+    <rect x="68" y="122" width="24" height="16" rx="4" fill="url(#rubber-stud)" stroke="#475569" stroke-width="1" filter="url(#inner-shadow)" />
+    <rect x="106" y="122" width="24" height="16" rx="4" fill="url(#rubber-stud)" stroke="#475569" stroke-width="1" filter="url(#inner-shadow)" />
+
+    <!-- Chrome Allen Bolts in Corners -->
+    <circle cx="26" cy="42" r="4.5" fill="url(#chrome-bolt)" stroke="#1e293b" stroke-width="0.8" />
+    <circle cx="26" cy="42" r="2" fill="#0f172a" />
+
+    <circle cx="134" cy="42" r="4.5" fill="url(#chrome-bolt)" stroke="#1e293b" stroke-width="0.8" />
+    <circle cx="134" cy="42" r="2" fill="#0f172a" />
+
+    <circle cx="26" cy="156" r="4.5" fill="url(#chrome-bolt)" stroke="#1e293b" stroke-width="0.8" />
+    <circle cx="26" cy="156" r="2" fill="#0f172a" />
+
+    <circle cx="134" cy="156" r="4.5" fill="url(#chrome-bolt)" stroke="#1e293b" stroke-width="0.8" />
+    <circle cx="134" cy="156" r="2" fill="#0f172a" />
+  </g>
+</svg>
+

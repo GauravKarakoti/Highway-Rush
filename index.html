@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Highway Rush</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game-canvas"></canvas>
+
+      <div id="hud" class="hidden">
+        <!-- Top Arcade Status Bar -->
+        <div class="hud-top">
+          <div class="hud-block">
+            <span class="hud-label">Score</span>
+            <span id="hud-score">0</span>
+          </div>
+
+          <div class="hud-block hud-center">
+            <span class="hud-label">Speed</span>
+            <span id="hud-speed">0 km/h</span>
+            <div id="brake-indicator" class="brake-indicator hidden">BRAKING</div>
+          </div>
+
+          <div class="hud-block hud-right">
+            <span class="hud-label">High</span>
+            <span id="hud-high">0</span>
+          </div>
+
+          <div class="hud-block hud-diff">
+            <span class="hud-label">Mode</span>
+            <span id="hud-difficulty" class="hud-diff-badge">PRO</span>
+          </div>
+
+          <!-- Settings Button -->
+          <button id="btn-settings-hud" class="hud-icon-btn" title="Settings & Garage">⚙️</button>
+        </div>
+
+        <!-- Combo Streak Badge -->
+        <div id="combo-badge" class="combo-badge hidden">
+          <div class="combo-title">COMBO</div>
+          <div id="combo-multiplier" class="combo-multiplier">x2</div>
+          <div class="combo-bar">
+            <div id="combo-fill" class="combo-fill"></div>
+          </div>
+        </div>
+
+        <!-- Camera Pill -->
+        <div id="camera-pill" class="camera-pill">CAM: CHASE [C]</div>
+
+        <!-- Hazard Warning Banner -->
+        <div id="hazard-banner" class="hazard-banner hidden">
+          <span class="hazard-icon">⚠️</span>
+          <span id="hazard-text">POLICE PURSUIT IN PROGRESS</span>
+        </div>
+
+        <!-- Nitro Energy Bar at Bottom -->
+        <div class="nitro-wrap">
+          <div class="nitro-label-row">
+            <span class="hud-label">Nitro Boost</span>
+            <span id="nitro-percent" class="nitro-percent">100%</span>
+          </div>
+          <div id="nitro-bar" class="nitro-bar ready">
+            <div id="nitro-fill" class="nitro-fill"></div>
+          </div>
+        </div>
+
+        <!-- On-Screen Real Pedals & Steering -->
+        <div id="touch-controls" class="touch-controls">
+          <div class="touch-cluster left-cluster">
+            <button id="btn-steer-left" class="touch-btn steer-btn" aria-label="Steer Left">◀</button>
+            <button id="btn-steer-right" class="touch-btn steer-btn" aria-label="Steer Right">▶</button>
+          </div>
+          <div class="touch-cluster right-cluster pedals-cluster">
+            <!-- Real Brushed Aluminum Brake Pedal -->
+            <button id="btn-brake" class="real-pedal-btn brake-pedal" aria-label="Brake Pedal" title="Brake Pedal [S / ↓]">
+              <img src="/pedal-brake.svg" alt="Brake Pedal" class="pedal-img" draggable="false" />
+              <span class="pedal-key-hint">BRAKE [S]</span>
+            </button>
+            <!-- Real Sports Gas / Nitro Pedal -->
+            <button id="btn-nitro" class="real-pedal-btn gas-pedal" aria-label="Nitro Pedal" title="Nitro Boost [W / SPACE]">
+              <img src="/pedal-gas.svg" alt="Nitro Pedal" class="pedal-img" draggable="false" />
+              <span class="pedal-key-hint">NITRO [W]</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="popups"></div>
+      <div id="flash"></div>
+
+      <!-- Overlays (Menu, Pause, Game Over, Settings) -->
+      <div id="overlay" class="overlay">
+        <!-- Start Menu -->
+        <div id="screen-menu" class="panel">
+          <h1>HIGHWAY RUSH</h1>
+          <p class="tagline">4-LANE HIGHWAY · REAL ICONIC CARS · BREAK & BOOST</p>
+          <p class="high-line">HIGH SCORE <span id="menu-high">0</span></p>
+
+          <!-- Quick Challenge Level Selector -->
+          <div class="menu-diff-select">
+            <span class="diff-title">CHALLENGE LEVEL</span>
+            <div class="diff-btn-group">
+              <button id="btn-diff-normal" class="diff-btn">NORMAL</button>
+              <button id="btn-diff-pro" class="diff-btn active">PRO</button>
+              <button id="btn-diff-insanity" class="diff-btn">INSANITY 🔥</button>
+            </div>
+          </div>
+
+          <div class="menu-action-buttons">
+            <button id="btn-start" class="arcade-btn primary-btn blink">PRESS ENTER OR CLICK TO RACE</button>
+            <button id="btn-open-settings" class="arcade-btn secondary-btn">⚙️ GARAGE & SETTINGS</button>
+          </div>
+
+          <div class="legend">
+            <div><kbd>←</kbd> <kbd>→</kbd> / <kbd>A</kbd> <kbd>D</kbd> <span>Steer / Change Lane</span></div>
+            <div><kbd>↓</kbd> / <kbd>S</kbd> <span>Brake / Decelerate</span></div>
+            <div><kbd>↑</kbd> / <kbd>W</kbd> / <kbd>SPACE</kbd> / <kbd>SHIFT</kbd> <span>Nitro Boost</span></div>
+            <div><kbd>C</kbd> <span>Switch Camera (Chase / Hood / Drone)</span></div>
+            <div><kbd>P</kbd> / <kbd>ESC</kbd> <span>Pause</span></div>
+            <div><kbd>M</kbd> <span>Mute Audio</span></div>
+          </div>
+        </div>
+
+        <!-- Pause Screen -->
+        <div id="screen-pause" class="panel hidden">
+          <h2>PAUSED</h2>
+          <div class="menu-action-buttons">
+            <button id="btn-resume" class="arcade-btn primary-btn">RESUME RACE</button>
+            <button id="btn-pause-settings" class="arcade-btn secondary-btn">⚙️ SETTINGS</button>
+          </div>
+          <p class="prompt">PRESS P OR ESC TO RESUME</p>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="screen-over" class="panel hidden">
+          <h2>GAME OVER</h2>
+          <p id="new-high" class="new-high hidden">🏆 NEW HIGH SCORE! 🏆</p>
+          <div class="game-over-stats">
+            <div class="stat-row">
+              <span>FINAL SCORE</span>
+              <span id="over-score">0</span>
+            </div>
+            <div class="stat-row">
+              <span>MAX COMBO</span>
+              <span id="over-combo">x1</span>
+            </div>
+            <div class="stat-row">
+              <span>DISTANCE</span>
+              <span id="over-dist">0 m</span>
+            </div>
+            <div class="stat-row highlight">
+              <span>BEST HIGH SCORE</span>
+              <span id="over-high">0</span>
+            </div>
+          </div>
+          <div class="menu-action-buttons">
+            <button id="btn-restart" class="arcade-btn primary-btn blink">RACE AGAIN [ENTER]</button>
+            <button id="btn-over-settings" class="arcade-btn secondary-btn">⚙️ GARAGE & SETTINGS</button>
+          </div>
+        </div>
+
+        <!-- Feature Settings & Garage Modal -->
+        <div id="screen-settings" class="panel settings-panel hidden">
+          <h2>GARAGE & SETTINGS</h2>
+
+          <!-- Car Select Garage Section -->
+          <div class="settings-section">
+            <div class="section-title">SELECT YOUR REAL CAR</div>
+            <div id="garage-cards" class="garage-cards">
+              <!-- Dynamically populated or rendered -->
+            </div>
+          </div>
+
+          <!-- Controls & Handling Section -->
+          <div class="settings-section">
+            <div class="section-title">DIFFICULTY & CHALLENGE</div>
+            <div class="setting-row">
+              <span class="setting-label">Traffic & Speed</span>
+              <div class="btn-group">
+                <button id="btn-settings-diff-normal" class="setting-opt-btn">NORMAL</button>
+                <button id="btn-settings-diff-pro" class="setting-opt-btn active">PRO</button>
+                <button id="btn-settings-diff-insanity" class="setting-opt-btn">INSANITY</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Controls & Handling Section -->
+          <div class="settings-section">
+            <div class="section-title">STEERING & CONTROLS</div>
+            <div class="setting-row">
+              <span class="setting-label">Steering Mode</span>
+              <div class="btn-group">
+                <button id="btn-mode-smooth" class="setting-opt-btn active">SMOOTH FLUID</button>
+                <button id="btn-mode-lane" class="setting-opt-btn">LANE SNAP</button>
+              </div>
+            </div>
+            <div class="setting-row">
+              <span class="setting-label">Steer Sensitivity</span>
+              <input type="range" id="slider-sensitivity" min="0.5" max="2.0" step="0.1" value="1.0" class="arcade-slider" />
+              <span id="label-sensitivity" class="slider-val">1.0x</span>
+            </div>
+            <div class="setting-row">
+              <span class="setting-label">On-Screen Brake/Nitro Buttons</span>
+              <input type="checkbox" id="check-touch-controls" checked class="arcade-check" />
+            </div>
+          </div>
+
+          <!-- Audio & Visuals Section -->
+          <div class="settings-section">
+            <div class="section-title">AUDIO & PRESENTATION</div>
+            <div class="setting-row">
+              <span class="setting-label">Master Volume</span>
+              <input type="range" id="slider-volume" min="0" max="100" step="5" value="60" class="arcade-slider" />
+              <span id="label-volume" class="slider-val">60%</span>
+            </div>
+            <div class="setting-row">
+              <span class="setting-label">Screen Shake FX</span>
+              <input type="range" id="slider-shake" min="0" max="150" step="10" value="100" class="arcade-slider" />
+              <span id="label-shake" class="slider-val">100%</span>
+            </div>
+          </div>
+
+          <div class="settings-footer">
+            <button id="btn-close-settings" class="arcade-btn primary-btn">APPLY & CLOSE</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

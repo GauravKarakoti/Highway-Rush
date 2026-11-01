@@ -213,14 +213,14 @@ export class Road {
 
       // Convert local unrotated plane vertex to world Z
       // Mesh is rotated -Math.PI/2 around X and placed at z = -112
-      const worldZ = oy - 112;
+      // Local +Y corresponds to world -Z, so worldZ = -oy - 112
+      const worldZ = -oy - 112;
 
       const curveX = globalTrackCurve.getCurveOffset(worldZ);
-      const hillY = globalTrackCurve.getHillOffset(worldZ);
 
       // In unrotated plane: X is lateral, Y is length (-Z), Z is elevation (Y)
       pos[idx] = ox + curveX;
-      pos[idx + 2] = oz + hillY;
+      pos[idx + 2] = oz; // Flat road elevation ensures road never clips or overlaps cars
     }
     posAttr.needsUpdate = true;
 
@@ -233,11 +233,10 @@ export class Road {
 
       const z = m.position.z;
       const curveX = globalTrackCurve.getCurveOffset(z);
-      const hillY = globalTrackCurve.getHillOffset(z);
       const yaw = globalTrackCurve.getCurveYaw(z);
 
       m.position.x = m.userData.baseX + curveX;
-      m.position.y = (m.userData.baseY || 0) + hillY;
+      m.position.y = (m.userData.baseY || 0);
       m.rotation.y = (m.userData.baseRotY || 0) + yaw;
     }
 

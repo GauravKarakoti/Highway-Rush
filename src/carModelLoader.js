@@ -1,19 +1,26 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { config } from './config.js';
+import { createRacingWheelTexture } from './textures.js';
 
 let cachedFerrariGltf = null;
 let gltfLoadingPromise = null;
 
 /**
- * Loads and caches the real Ferrari 458 Italia 3D model.
+ * Loads and caches the real Ferrari 458 Italia 3D model with DRACO decoder support.
  */
 export function preloadCarModel() {
   if (cachedFerrariGltf) return Promise.resolve(cachedFerrariGltf);
   if (gltfLoadingPromise) return gltfLoadingPromise;
 
+  const dracoLoader = new DRACOLoader();
+  dracoLoader.setDecoderPath('/draco/');
+
   const loader = new GLTFLoader();
+  loader.setDRACOLoader(dracoLoader);
+
   gltfLoadingPromise = new Promise((resolve, reject) => {
     loader.load(
       '/ferrari.glb',
@@ -32,12 +39,16 @@ export function preloadCarModel() {
   return gltfLoadingPromise;
 }
 
+export function isRealModelLoaded() {
+  return cachedFerrariGltf !== null;
+}
+
 /**
  * Creates an instance of the real car 3D model with realistic materials,
  * steerable/spinning wheels, brake lights, and exhaust flame jets.
  */
-export function createRealCarInstance(carId = 'ferrari_f40', customColorHex = null) {
-  const carCfg = config.cars[carId] || config.cars.ferrari_f40;
+export function createRealCarInstance(carId = 'ferrari_italia', customColorHex = null) {
+  const carCfg = config.cars[carId] || config.cars.ferrari_italia;
   const paintColor = customColorHex !== null ? customColorHex : carCfg.color;
 
   const g = new THREE.Group();
@@ -110,10 +121,28 @@ export function createRealCarInstance(carId = 'ferrari_f40', customColorHex = nu
     const wrl = carScene.getObjectByName('wheel_rl');
     const wrr = carScene.getObjectByName('wheel_rr');
 
-    if (wfl) { wheels.push(wfl); frontWheels.push(wfl); }
-    if (wfr) { wheels.push(wfr); frontWheels.push(wfr); }
-    if (wrl) wheels.push(wrl);
-    if (wrr) wheels.push(wrr);
+    const wheelTex = createRacingWheelTexture('sport', '#fbbf24');
+    const wheelFaceMat = new THREE.MeshBasicMaterial({ map: wheelTex, transparent: true });
+
+    const wheelList = [
+      { node: wfl, isFront: true, side: -1 },
+      { node: wfr, isFront: true, side: 1 },
+      { node: wrl, isFront: false, side: -1 },
+      { node: wrr, isFront: false, side: 1 },
+    ];
+
+    for (const item of wheelList) {
+      if (item.node) {
+        wheels.push(item.node);
+        if (item.isFront) frontWheels.push(item.node);
+
+        // Add high-contrast rotating wheel face disc
+        const disc = new THREE.Mesh(new THREE.CircleGeometry(0.34, 16), wheelFaceMat);
+        disc.rotation.y = item.side > 0 ? Math.PI / 2 : -Math.PI / 2;
+        disc.position.x = item.side > 0 ? 0.16 : -0.16;
+        item.node.add(disc);
+      }
+    }
 
     // Dual/Triple Exhaust Jets at rear diffuser
     const flameCyan = new THREE.MeshBasicMaterial({ color: 0x00e1ff, transparent: true, opacity: 0.92 });
@@ -159,10 +188,6 @@ export function createRealCarInstance(carId = 'ferrari_f40', customColorHex = nu
   }
 
   return null;
-}
-
-export function isRealModelLoaded() {
-  return cachedFerrariGltf !== null;
 }
 
 /**
@@ -226,9 +251,19 @@ export function createRealTrafficCar(colorHex = 0xffb700) {
 
   g.add(carScene);
 
+  const wheelTex = createRacingWheelTexture('sport', '#00f0ff');
+  const wheelFaceMat = new THREE.MeshBasicMaterial({ map: wheelTex, transparent: true });
+
   for (const name of ['wheel_fl', 'wheel_fr', 'wheel_rl', 'wheel_rr']) {
     const w = carScene.getObjectByName(name);
-    if (w) wheels.push(w);
+    if (w) {
+      wheels.push(w);
+      const isRight = name.includes('_fr') || name.includes('_rr');
+      const disc = new THREE.Mesh(new THREE.CircleGeometry(0.34, 16), wheelFaceMat);
+      disc.rotation.y = isRight ? Math.PI / 2 : -Math.PI / 2;
+      disc.position.x = isRight ? 0.16 : -0.16;
+      w.add(disc);
+    }
   }
 
   // Forward 3D Headlight Cones projecting onto the highway

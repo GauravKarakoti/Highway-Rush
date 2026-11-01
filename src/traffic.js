@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { config, laneX } from './config.js';
 import { globalTrackCurve } from './trackCurve.js';
-import { createTruckContainerTexture, createTruckRearHazardTexture } from './textures.js';
+import { createTruckContainerTexture, createTruckRearHazardTexture, createRacingWheelTexture } from './textures.js';
 import { createRealTrafficCar, isRealModelLoaded } from './carModelLoader.js';
 
 const KINDS = ['sedan', 'van', 'truck', 'speeder', 'police'];
@@ -19,6 +19,12 @@ const TRAFFIC_COLORS = [
   0xf8fafc, // Gloss Pure White
   0x38bdf8, // Sky Blue
   0xf43f5e, // Rose Red
+  0x8b5cf6, // Royal Violet
+  0xec4899, // Fuchsia
+  0x06b6d4, // Vivid Teal
+  0xeab308, // Cyber Gold
+  0x14b8a6, // Mint Jade
+  0x6366f1, // Indigo
 ];
 
 export class Traffic {
@@ -45,6 +51,8 @@ export class Traffic {
         taillights: carData.taillights,
         policeStrobes: carData.policeStrobes,
         bodyMesh: carData.bodyMesh,
+        containerMesh: carData.containerMesh,
+        tunerStripeMesh: carData.tunerStripeMesh,
         kind,
         alive: false,
         lane: 1,
@@ -77,7 +85,7 @@ export class Traffic {
     this.policeWarningActive = false;
   }
 
-  update(dt, worldSpeed, playerLane, playerX, closedLane = -1) {
+  update(dt, worldSpeed, playerLane, playerX, closedLane = -1, speedBreakers = []) {
     const events = {
       crashed: false,
       nearMiss: false,
@@ -92,6 +100,25 @@ export class Traffic {
     // Update active traffic vehicles
     for (let i = this.active.length - 1; i >= 0; i--) {
       const car = this.active[i];
+
+      // Traffic car reacts to approaching speed breaker
+      if (!car.isBraking && speedBreakers && speedBreakers.length > 0) {
+        for (const sb of speedBreakers) {
+          const distToSb = sb.z - car.group.position.z;
+          // When 4m to 30m ahead of speed breaker in traffic car's lane
+          if (distToSb > 2 && distToSb < 28) {
+            const inLane = sb.spanAllLanes || (car.lane >= sb.laneRange[0] && car.lane <= sb.laneRange[1]);
+            if (inLane) {
+              car.isBraking = true;
+              car.brakeTimer = 1.6;
+              for (const tl of car.taillights) {
+                tl.emissiveIntensity = 6.0;
+              }
+              break;
+            }
+          }
+        }
+      }
 
       // Relative forward movement
       let effectiveSpeedFactor = car.speedFactor;
@@ -109,10 +136,11 @@ export class Traffic {
       const relativeSpeed = worldSpeed * (2.0 - effectiveSpeedFactor);
       car.group.position.z += relativeSpeed * dt;
 
-      // Wheel spinning animation
-      const wheelSpin = (relativeSpeed / 0.35) * dt;
+      // Wheel spinning animation rolling along the road
+      const groundSpeed = worldSpeed * (car.isBraking ? 0.5 : car.speedFactor);
+      const wheelSpin = (groundSpeed / 0.35) * dt;
       for (const w of car.wheels) {
-        w.rotation.x += wheelSpin;
+        w.rotation.x -= wheelSpin;
       }
 
       // Police strobe lights animation
@@ -166,14 +194,13 @@ export class Traffic {
         }
       }
 
-      // Synchronize with 3D Highway Curvature & Rolling Hills
+      // Synchronize with 3D Highway Curvature
       const z = car.group.position.z;
       const curveX = globalTrackCurve.getCurveOffset(z);
-      const hillY = globalTrackCurve.getHillOffset(z);
       const yaw = globalTrackCurve.getCurveYaw(z);
 
       car.group.position.x = car.baseX + curveX;
-      car.group.position.y = hillY;
+      car.group.position.y = 0;
       car.group.rotation.y = car.baseRotY + yaw;
       car.group.rotation.z = car.baseRotZ;
 
@@ -403,8 +430,15 @@ export class Traffic {
     if (car.kind === 'speeder') car.speedFactor += Math.random() * 0.18;
 
     // Random vivid color for cars
+    const freshColor = randomColor();
     if (car.bodyMesh && car.kind !== 'police') {
-      car.bodyMesh.material.color.setHex(randomColor());
+      car.bodyMesh.material.color.setHex(freshColor);
+    }
+    if (car.containerMesh) {
+      car.containerMesh.material.color.setHex(randomColor());
+    }
+    if (car.tunerStripeMesh) {
+      car.tunerStripeMesh.material.color.setHex(randomColor());
     }
 
     car.group.visible = true;
@@ -433,6 +467,8 @@ export function buildTrafficVehicle(kind, color) {
   const taillights = [];
   let policeStrobes = null;
   let bodyMesh = null;
+  let containerMesh = null;
+  let tunerStripeMesh = null;
 
   const tireMat = new THREE.MeshStandardMaterial({ color: 0x181a20, roughness: 0.9 });
   const wheelHubMat = new THREE.MeshStandardMaterial({ color: 0xd8e2ee, metalness: 0.85, roughness: 0.2 });
@@ -506,6 +542,7 @@ export function buildTrafficVehicle(kind, color) {
     container.position.set(0, 1.4, 1.1);
     container.castShadow = true;
     g.add(container);
+    containerMesh = container;
 
     // High-visibility hazard chevron on rear container doors
     const hazardMat = new THREE.MeshBasicMaterial({ map: createTruckRearHazardTexture() });
@@ -646,6 +683,7 @@ export function buildTrafficVehicle(kind, color) {
     const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.04, 3.6), chromeMat);
     stripe.position.set(0, 0.69, 0);
     g.add(stripe);
+    tunerStripeMesh = stripe;
 
     const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.46, 1.6), glassMat);
     cabin.position.set(0, 0.84, -0.1);
@@ -797,6 +835,8 @@ export function buildTrafficVehicle(kind, color) {
     taillights,
     policeStrobes,
     bodyMesh,
+    containerMesh,
+    tunerStripeMesh,
     halfWidth: halfW,
     halfLength: halfL,
   };
@@ -804,11 +844,23 @@ export function buildTrafficVehicle(kind, color) {
 
 function createSimpleWheel(tireMat, hubMat, radius, width) {
   const g = new THREE.Group();
-  const tire = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, width, 12), tireMat);
+  const tire = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, width, 16), tireMat);
   tire.rotation.z = Math.PI / 2;
-  const hub = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.65, radius * 0.65, width + 0.02, 8), hubMat);
-  hub.rotation.z = Math.PI / 2;
-  g.add(tire, hub);
+  g.add(tire);
+
+  const wheelTex = createRacingWheelTexture('sport', '#fbbf24');
+  const wheelFaceMat = new THREE.MeshBasicMaterial({ map: wheelTex, transparent: true });
+
+  const discL = new THREE.Mesh(new THREE.CircleGeometry(radius * 0.98, 16), wheelFaceMat);
+  discL.rotation.y = -Math.PI / 2;
+  discL.position.x = -width * 0.5 - 0.01;
+  g.add(discL);
+
+  const discR = new THREE.Mesh(new THREE.CircleGeometry(radius * 0.98, 16), wheelFaceMat);
+  discR.rotation.y = Math.PI / 2;
+  discR.position.x = width * 0.5 + 0.01;
+  g.add(discR);
+
   return g;
 }
 

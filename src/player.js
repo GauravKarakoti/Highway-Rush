@@ -3,12 +3,14 @@ import { config, laneX } from './config.js';
 import { getSettings } from './storage.js';
 import { preloadCarModel, createRealCarInstance } from './carModelLoader.js';
 import { globalTrackCurve } from './trackCurve.js';
+import { createRacingWheelTexture } from './textures.js';
 
 export class Player {
   constructor(scene) {
     this.scene = scene;
     this.settings = getSettings();
     this.carId = this.settings.selectedCar || 'ferrari_italia';
+    this.customColorHex = this.settings.customColorHex || null;
 
     this.lane = 1;
     this.fromLane = 1;
@@ -32,6 +34,10 @@ export class Player {
 
     this.brakeHeld = false;
     this.isBraking = false;
+    this.oilSlipTimer = 0;
+    this.bumpDuration = 0;
+    this.bumpTimer = 0;
+    this.bumpIntensity = 0;
 
     // Build the initial car mesh (procedural first)
     this._loadCarModel(this.carId);
@@ -50,15 +56,20 @@ export class Player {
     this._loadCarModel(carId);
   }
 
+  setColor(colorHex) {
+    this.customColorHex = colorHex === 'default' ? null : colorHex;
+    this._loadCarModel(this.carId);
+  }
+
   _loadCarModel(carId) {
     if (this.group) {
       this.scene.remove(this.group);
     }
 
     // Try real 3D car model first
-    let carData = createRealCarInstance(carId);
+    let carData = createRealCarInstance(carId, this.customColorHex);
     if (!carData) {
-      carData = buildRealCar(carId);
+      carData = buildRealCar(carId, this.customColorHex);
     }
 
     this.carData = carData;
@@ -96,6 +107,12 @@ export class Player {
     this.steeringYaw = -slipDir * 0.42;
   }
 
+  applySpeedBreakerBump(intensity = 1.0) {
+    this.bumpDuration = 0.55;
+    this.bumpTimer = 0.55;
+    this.bumpIntensity = intensity;
+  }
+
   reset() {
     this.lane = 1;
     this.fromLane = 1;
@@ -116,6 +133,10 @@ export class Player {
     this.lockout = 0;
     this.brakeHeld = false;
     this.isBraking = false;
+    this.oilSlipTimer = 0;
+    this.bumpDuration = 0;
+    this.bumpTimer = 0;
+    this.bumpIntensity = 0;
 
     this.group.position.set(this.x, 0, 0);
     this.group.rotation.set(0, 0, 0);
@@ -255,20 +276,32 @@ export class Player {
       this.steeringYaw += Math.sin(this.oilSlipTimer * 14) * 0.12;
     }
 
+    // Speed breaker two-phase axle heave bounce
+    let bumpY = 0;
+    let bumpPitch = 0;
+    if (this.bumpTimer > 0) {
+      this.bumpTimer -= dt;
+      const t = this.bumpDuration - this.bumpTimer;
+      const frontPhase = Math.max(0, Math.sin(Math.min(Math.PI, t * 14)));
+      const rearPhase = t > 0.1 ? Math.max(0, Math.sin(Math.min(Math.PI, (t - 0.1) * 14))) : 0;
+      bumpY = (frontPhase * 0.5 + rearPhase * 0.6) * this.bumpIntensity * Math.exp(-t * 3.0);
+      bumpPitch = (rearPhase - frontPhase) * this.bumpIntensity * 0.24;
+    }
+
     // High-speed suspension flutter
     const bounce = Math.sin(performance.now() * 0.035) * (currentSpeed * 0.0006);
 
     // Update car transforms
     this.group.position.x = this.x;
-    this.group.position.y = bounce;
+    this.group.position.y = bounce + bumpY;
     this.group.rotation.z = this.tilt + (globalTrackCurve.curvature * 0.024);
-    this.group.rotation.x = this.pitch;
+    this.group.rotation.x = this.pitch + bumpPitch;
     this.group.rotation.y = this.steeringYaw * 0.45;
 
     // Spin wheels according to speed
     const wheelAngularSpeed = (currentSpeed / 0.38) * dt;
     for (const w of this.wheels) {
-      w.rotation.x += wheelAngularSpeed;
+      w.rotation.x -= wheelAngularSpeed;
     }
     // Front wheels steer with steering yaw
     for (const fw of this.frontWheels) {
@@ -339,14 +372,15 @@ export class Player {
  * 3. Nissan Skyline GT-R R34
  * 4. Ferrari F40
  */
-export function buildRealCar(carId = 'porsche_gt3') {
-  const carCfg = config.cars[carId] || config.cars.porsche_gt3;
+export function buildRealCar(carId = 'ferrari_italia', customColorHex = null) {
+  const carCfg = config.cars[carId] || config.cars.ferrari_italia;
+  const paintColor = customColorHex !== null ? customColorHex : carCfg.color;
   const g = new THREE.Group();
 
   const paintMat = new THREE.MeshStandardMaterial({
-    color: carCfg.color,
-    metalness: 0.75,
-    roughness: 0.22,
+    color: paintColor,
+    metalness: 0.85,
+    roughness: 0.18,
   });
   const carbonMat = new THREE.MeshStandardMaterial({
     color: 0x12151c,
@@ -372,14 +406,18 @@ export function buildRealCar(carId = 'porsche_gt3') {
   const taillights = [];
   const brakelights = [];
 
-  // Wheel setup helper
-  function addWheels(activeRimMat = rimMat) {
+  // Wheel setup helper with High-Contrast Rotating Wheel Face Discs
+  function addWheels(activeRimMat = rimMat, rimAccent = '#fbbf24') {
     const wheelPositions = [
       { x: -0.92, y: 0.36, z: -1.35, isFront: true },
       { x: 0.92, y: 0.36, z: -1.35, isFront: true },
       { x: -0.94, y: 0.38, z: 1.35, isFront: false },
       { x: 0.94, y: 0.38, z: 1.35, isFront: false },
     ];
+
+    const wheelTex = createRacingWheelTexture('sport', rimAccent);
+    const wheelFaceMat = new THREE.MeshBasicMaterial({ map: wheelTex, transparent: true });
+
     for (const pos of wheelPositions) {
       const wheelAnchor = new THREE.Group();
       wheelAnchor.position.set(pos.x, pos.y, pos.z);
@@ -390,16 +428,11 @@ export function buildRealCar(carId = 'porsche_gt3') {
       tire.castShadow = true;
       rotatingHub.add(tire);
 
-      const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.33, 12), activeRimMat);
-      rim.rotation.z = Math.PI / 2;
-      rotatingHub.add(rim);
-
-      for (let s = 0; s < 5; s++) {
-        const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.46, 0.06), activeRimMat);
-        spoke.rotation.x = (s * Math.PI) / 2.5;
-        spoke.position.x = pos.x > 0 ? 0.16 : -0.16;
-        rotatingHub.add(spoke);
-      }
+      // Rotating Wheel Face Disc with visible alloy spokes, white letters, racing markings
+      const disc = new THREE.Mesh(new THREE.CircleGeometry(0.355, 16), wheelFaceMat);
+      disc.rotation.y = pos.x > 0 ? Math.PI / 2 : -Math.PI / 2;
+      disc.position.x = pos.x > 0 ? 0.165 : -0.165;
+      rotatingHub.add(disc);
 
       const caliper = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, 0.14), caliperMat);
       caliper.position.set(pos.x > 0 ? -0.06 : 0.06, 0.14, 0);
@@ -449,7 +482,77 @@ export function buildRealCar(carId = 'porsche_gt3') {
   g.add(underglowPlane);
 
   // BUILD SPECIFIC REAL CAR
-  if (carId === 'porsche_gt3') {
+  if (carId === 'ferrari_italia') {
+    // ----------------------------------------------------
+    // FERRARI 458 ITALIA
+    // Low-slung sculpted aerodynamic nose, swept-back LED headlights,
+    // rear engine bay glass hatch, triple center exhaust, rear diffuser
+    // ----------------------------------------------------
+    const chassis = new THREE.Mesh(new THREE.BoxGeometry(1.82, 0.22, 4.3), carbonMat);
+    chassis.position.set(0, 0.24, 0);
+    g.add(chassis);
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.78, 0.42, 2.7), paintMat);
+    body.position.set(0, 0.48, 0.15);
+    body.castShadow = true;
+    g.add(body);
+
+    const hood = new THREE.Mesh(new THREE.BoxGeometry(1.72, 0.28, 1.6), paintMat);
+    hood.position.set(0, 0.42, -1.45);
+    hood.rotation.x = 0.18;
+    g.add(hood);
+
+    const splitter = new THREE.Mesh(new THREE.BoxGeometry(1.76, 0.06, 0.5), carbonMat);
+    splitter.position.set(0, 0.18, -2.2);
+    g.add(splitter);
+
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.46, 1.7), glassMat);
+    cabin.position.set(0, 0.86, -0.1);
+    g.add(cabin);
+
+    const engineGlass = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.08, 1.1), glassMat);
+    engineGlass.position.set(0, 0.74, 0.85);
+    engineGlass.rotation.x = -0.16;
+    g.add(engineGlass);
+
+    const manifoldMat = new THREE.MeshStandardMaterial({ color: 0xef1122, roughness: 0.3 });
+    const manifold = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.14, 0.7), manifoldMat);
+    manifold.position.set(0, 0.58, 0.85);
+    g.add(manifold);
+
+    const headMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff8e7, emissiveIntensity: 3.5 });
+    for (const x of [-0.64, 0.64]) {
+      const hl = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.10, 0.55), headMat);
+      hl.position.set(x, 0.54, -1.65);
+      hl.rotation.x = 0.18;
+      g.add(hl);
+    }
+
+    const tailMat = new THREE.MeshStandardMaterial({ color: 0xff0025, emissive: 0xff0020, emissiveIntensity: 3.5 });
+    for (const x of [-0.62, 0.62]) {
+      const tl = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.08, 16), tailMat);
+      tl.rotation.x = Math.PI / 2;
+      tl.position.set(x, 0.64, 2.14);
+      g.add(tl);
+    }
+    brakelights.push(tailMat);
+
+    const chromePipeMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, metalness: 0.95, roughness: 0.1 });
+    for (const x of [-0.14, 0, 0.14]) {
+      const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.18, 10), chromePipeMat);
+      pipe.rotation.x = Math.PI / 2;
+      pipe.position.set(x, 0.34, 2.18);
+      g.add(pipe);
+    }
+
+    addWheels(rimMat, '#fbbf24');
+
+    addExhaustFlames([
+      { x: -0.14, y: 0.34, z: 2.18 },
+      { x: 0, y: 0.34, z: 2.18 },
+      { x: 0.14, y: 0.34, z: 2.18 },
+    ]);
+  } else if (carId === 'porsche_gt3') {
     // ----------------------------------------------------
     // PORSCHE 911 GT3 RS
     // Signature curved teardrop silhouette, round bug-eye headlights, swan-neck GT wing

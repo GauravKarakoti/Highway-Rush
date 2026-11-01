@@ -6,6 +6,7 @@ export const DEFAULT_SETTINGS = {
   difficulty: 'PRO', // 'NORMAL', 'PRO', 'INSANITY'
   steeringMode: 'SMOOTH', // 'SMOOTH' (fluid continuous) or 'LANE' (discrete lane-snap)
   selectedCar: 'ferrari_italia', // 'ferrari_italia', 'porsche_gt3', 'lambo_aventador', 'nissan_gtr', 'ferrari_f40'
+  customColorHex: null, // Custom user chosen paint color
   steeringSensitivity: 1.0, // 0.5 to 2.0
   touchControls: true, // Show on-screen brake/nitro buttons
   screenShake: 1.0, // 0.0 to 1.5

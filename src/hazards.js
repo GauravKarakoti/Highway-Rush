@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { config, laneX } from './config.js';
 import { globalTrackCurve } from './trackCurve.js';
+import { createSpeedBreakerTexture, createSpeedBumpSignTexture } from './textures.js';
 
 /**
  * 3D Dynamic Road Hazards System.
  * Manages active construction zone lane closures, 3D chevron arrow trailers,
- * traffic cones, heavy concrete Jersey barriers, and iridescent oil slicks.
+ * traffic cones, heavy concrete Jersey barriers, speed breakers, and iridescent oil slicks.
  */
 export class HazardManager {
   constructor(scene) {
@@ -16,6 +17,8 @@ export class HazardManager {
     this.constructionTimer = 22.0;
     this.oilTimer = 14.0;
     this.billboardTimer = 8.0;
+    this.speedBreakerTimer = 12.0;
+    this.speedBreakerTimer = 12.0;
 
     // Materials
     this.concreteMat = new THREE.MeshStandardMaterial({
@@ -56,6 +59,7 @@ export class HazardManager {
     this.constructionTimer = 22.0;
     this.oilTimer = 14.0;
     this.billboardTimer = 8.0;
+    this.speedBreakerTimer = 12.0;
   }
 
   /**
@@ -67,6 +71,10 @@ export class HazardManager {
       crashed: false,
       oilSlip: false,
       coneHit: false,
+      speedBreakerHit: false,
+      speedBreakerHarsh: false,
+      speedBreakerSpeed: 0,
+      speedBreakers: [],
       hazardWarning: null,
       closedLane: -1,
     };
@@ -100,12 +108,11 @@ export class HazardManager {
         }
       }
 
-      // Synchronize 3D curve and hill elevation
+      // Synchronize 3D highway curve
       const curveX = globalTrackCurve.getCurveOffset(h.z);
-      const hillY = globalTrackCurve.getHillOffset(h.z);
       const yaw = globalTrackCurve.getCurveYaw(h.z);
 
-      h.group.position.set(h.baseX + curveX, (h.baseY || 0) + hillY, h.z);
+      h.group.position.set(h.baseX + curveX, (h.baseY || 0), h.z);
       h.group.rotation.y = (h.baseRotY || 0) + yaw;
 
       // Collision Detection with Player
@@ -127,7 +134,7 @@ export class HazardManager {
           const coneWorldX = h.baseX + cone.relX;
           if (Math.abs(coneWorldZ) < 1.4 && Math.abs(playerX - coneWorldX) < 1.1) {
             // Knock cone flying!
-            this._launchFlyingCone(coneWorldX + curveX, hillY + 0.3, coneWorldZ, worldSpeed);
+            this._launchFlyingCone(coneWorldX + curveX, 0.3, coneWorldZ, worldSpeed);
             h.group.remove(cone.mesh);
             h.cones.splice(cIdx, 1);
             events.coneHit = true;
@@ -137,6 +144,27 @@ export class HazardManager {
         // Oil slick slip check
         if (Math.abs(h.z) < 2.0 && Math.abs(playerX - h.baseX) < 1.6) {
           events.oilSlip = true;
+        }
+      } else if (h.type === 'speed_breaker') {
+        events.speedBreakers.push({ z: h.z, spanAllLanes: h.spanAllLanes, laneRange: h.laneRange });
+
+        // Upcoming road warning
+        if (h.z < -25 && h.z > -140) {
+          const inRange = h.spanAllLanes || (playerLane >= h.laneRange[0] && playerLane <= h.laneRange[1]);
+          if (inRange) {
+            events.hazardWarning = 'SPEED BREAKER AHEAD - SLOW DOWN!';
+          }
+        }
+
+        // Crossing check when player car is at z = 0
+        if (!h.alreadyHit && Math.abs(h.z) < 1.2) {
+          const inX = Math.abs(playerX - h.baseX) <= (h.spanWidth * 0.5 + 0.85);
+          if (inX) {
+            h.alreadyHit = true;
+            events.speedBreakerHit = true;
+            events.speedBreakerHarsh = !isBraking || worldSpeed > (config.speedBreaker?.safeCrossingSpeed || 22);
+            events.speedBreakerSpeed = worldSpeed;
+          }
         }
       }
 
@@ -185,6 +213,14 @@ export class HazardManager {
     if (this.oilTimer <= 0) {
       this._spawnOilSlick();
       this.oilTimer = difficulty.oilSlickInterval + Math.random() * 6.0;
+    }
+
+    // Speed Breaker Spawner
+    this.speedBreakerTimer -= dt;
+    if (this.speedBreakerTimer <= 0) {
+      this._spawnSpeedBreaker();
+      const interval = difficulty.speedBreakerInterval || 18.0;
+      this.speedBreakerTimer = interval + (Math.random() * 4.0 - 2.0);
     }
 
     // Billboard Spawner
@@ -368,6 +404,121 @@ export class HazardManager {
       baseX: bX,
       baseY: 0,
       z: spawnZ,
+      collisionBoxes: [],
+      cones: [],
+    });
+  }
+
+  /**
+   * Spawns a full 3D Speed Breaker across the highway with alternating yellow/black
+   * hazard stripes, embedded amber road studs, and roadside diamond warning signs.
+   */
+  _spawnSpeedBreaker() {
+    const group = new THREE.Group();
+    const spawnZ = config.spawnZ - 10;
+    const roadWidth = config.lanes * config.laneWidth;
+
+    // 70% full road speed breaker, 30% dual-lane speed breaker
+    const spanAllLanes = Math.random() < 0.70;
+    let spanWidth = roadWidth + 1.2;
+    let baseX = 0;
+    let laneRange = [0, config.lanes - 1];
+
+    if (!spanAllLanes) {
+      const startLane = Math.floor(Math.random() * (config.lanes - 1));
+      laneRange = [startLane, startLane + 1];
+      baseX = (laneX(startLane) + laneX(startLane + 1)) * 0.5;
+      spanWidth = config.laneWidth * 2.15;
+    }
+
+    // 1. Arched 3D Speed Hump Geometry
+    const halfDepth = 0.75; // Total depth = 1.5m
+    const humpHeight = config.speedBreaker?.bumpHeight || 0.16;
+    const shape = new THREE.Shape();
+    shape.moveTo(-halfDepth, 0);
+    shape.quadraticCurveTo(0, humpHeight * 1.75, halfDepth, 0);
+    shape.lineTo(halfDepth, -0.04);
+    shape.lineTo(-halfDepth, -0.04);
+    shape.closePath();
+
+    const humpGeo = new THREE.ExtrudeGeometry(shape, { depth: spanWidth, bevelEnabled: false, steps: 1 });
+    humpGeo.rotateY(Math.PI / 2);
+    humpGeo.translate(-spanWidth * 0.5, 0, 0);
+
+    const breakerTex = createSpeedBreakerTexture();
+    breakerTex.repeat.set(Math.round(spanWidth * 0.6), 1);
+    const breakerMat = new THREE.MeshStandardMaterial({
+      map: breakerTex,
+      roughness: 0.65,
+      metalness: 0.15,
+    });
+
+    const humpMesh = new THREE.Mesh(humpGeo, breakerMat);
+    humpMesh.castShadow = true;
+    humpMesh.receiveShadow = true;
+    group.add(humpMesh);
+
+    // 2. Embedded Cat-Eye Reflectors (Solar Road Studs) along approaches
+    const studMat = new THREE.MeshStandardMaterial({
+      color: 0xffaa00,
+      emissive: 0xff8800,
+      emissiveIntensity: 3.0,
+      roughness: 0.2,
+    });
+    const studGeo = new THREE.BoxGeometry(0.12, 0.05, 0.12);
+    const studSpacing = 1.8;
+    const numStuds = Math.floor(spanWidth / studSpacing);
+
+    for (let s = 0; s <= numStuds; s++) {
+      const sx = -spanWidth * 0.5 + s * studSpacing + (spanWidth - numStuds * studSpacing) * 0.5;
+      for (const sz of [-halfDepth - 0.08, halfDepth + 0.08]) {
+        const stud = new THREE.Mesh(studGeo, studMat);
+        stud.position.set(sx, 0.03, sz);
+        group.add(stud);
+      }
+    }
+
+    // 3. Roadside Diamond Warning Sign placed ahead on shoulder
+    const signSide = baseX < 0 ? -1 : 1;
+    const signX = signSide * (roadWidth * 0.5 + 1.25);
+    const signGroup = new THREE.Group();
+    signGroup.position.set(signX, 0, -22);
+
+    const postMat = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.8, roughness: 0.2 });
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.8, 8), postMat);
+    post.position.y = 1.4;
+    signGroup.add(post);
+
+    const signTex = createSpeedBumpSignTexture();
+    const signMat = new THREE.MeshStandardMaterial({
+      map: signTex,
+      roughness: 0.35,
+      metalness: 0.2,
+      emissive: 0xffd700,
+      emissiveIntensity: 0.25,
+      transparent: true,
+    });
+    const diamondSign = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.2), signMat);
+    diamondSign.position.set(0, 2.5, 0.04);
+    diamondSign.rotation.y = signSide > 0 ? -0.2 : 0.2;
+    signGroup.add(diamondSign);
+
+    group.add(signGroup);
+
+    group.position.set(baseX, 0, spawnZ);
+    this.scene.add(group);
+
+    this.activeHazards.push({
+      type: 'speed_breaker',
+      group,
+      baseX,
+      baseY: 0,
+      z: spawnZ,
+      spanWidth,
+      halfDepth,
+      spanAllLanes,
+      laneRange,
+      alreadyHit: false,
       collisionBoxes: [],
       cones: [],
     });

@@ -24,7 +24,8 @@ export class Game {
 
     this.ui = new UI(
       (carId) => this._onCarSelect(carId),
-      (newSettings) => this._onSettingsChange(newSettings)
+      (newSettings) => this._onSettingsChange(newSettings),
+      (colorHex) => this._onColorSelect(colorHex)
     );
 
     this.state = 'MENU';
@@ -39,6 +40,11 @@ export class Game {
     this.camFov = config.camera.CHASE.fovBase;
     this.keys = new Set();
     this.isNewHigh = false;
+
+    // Speed Breaker penalty state (2-3s slowdown)
+    this.speedBreakerTimer = 0;
+    this.speedBreakerTotal = 2.5;
+    this.speedBreakerPenalty = false;
 
     // Steering input from touch or mouse
     this.touchSteer = 0;
@@ -59,6 +65,11 @@ export class Game {
 
   _onCarSelect(carId) {
     this.player.setCar(carId);
+    this.audio.click();
+  }
+
+  _onColorSelect(colorHex) {
+    this.player.setColor(colorHex);
     this.audio.click();
   }
 
@@ -106,6 +117,37 @@ export class Game {
       this.speed = THREE.MathUtils.damp(this.speed, targetBaseSpeed, config.speedRamp, dt);
     }
 
+    // Speed Breaker penalty speed reduction constraint (2-3 seconds duration)
+    if (this.speedBreakerTimer > 0) {
+      this.speedBreakerTimer = Math.max(0, this.speedBreakerTimer - dt);
+      if (this.speedBreakerPenalty) {
+        // Enforce speed reduction over the 2-3 seconds
+        const recoveryProgress = 1 - (this.speedBreakerTimer / (this.speedBreakerTotal || 2.5));
+        // Reduced speed cap starts at ~16 units/s (approx 40 km/h) and smoothly recovers back to targetBaseSpeed
+        const maxAllowed = THREE.MathUtils.lerp(
+          config.speedBreaker?.reducedSpeed || 16,
+          targetBaseSpeed,
+          recoveryProgress * recoveryProgress
+        );
+        this.speed = Math.min(this.speed, maxAllowed);
+
+        // Keep nitro suppressed during recovery
+        this.player.nitroActive = false;
+        this.player.lockout = Math.max(this.player.lockout || 0, this.speedBreakerTimer);
+
+        // Update UI indicator with remaining seconds
+        if (this.ui.updateSpeedBreakerPenalty) {
+          this.ui.updateSpeedBreakerPenalty(this.speedBreakerTimer, this.speedBreakerTotal);
+        }
+      }
+      if (this.speedBreakerTimer <= 0) {
+        this.speedBreakerPenalty = false;
+        if (this.ui.clearSpeedBreakerPenalty) {
+          this.ui.clearSpeedBreakerPenalty();
+        }
+      }
+    }
+
     const nitroMul = this.player.nitroActive ? config.nitroMultiplier : 1;
     const worldSpeed = this.speed * nitroMul;
 
@@ -120,8 +162,15 @@ export class Game {
     // Update Road Hazards (Construction Zone Lane Closures, Oil Slicks, Billboards)
     const hazardEvents = this.hazards.update(dt, worldSpeed, this.player.x, this.player.lane, this.player.isBraking);
 
-    // Update Traffic AI with awareness of closed construction lane
-    const events = this.traffic.update(dt, worldSpeed, this.player.lane, this.player.x, hazardEvents.closedLane);
+    // Update Traffic AI with awareness of closed construction lane and speed breakers
+    const events = this.traffic.update(
+      dt,
+      worldSpeed,
+      this.player.lane,
+      this.player.x,
+      hazardEvents.closedLane,
+      hazardEvents.speedBreakers
+    );
 
     if (hazardEvents.hazardWarning) {
       this.ui.showHazardAlert(hazardEvents.hazardWarning, 'danger');
@@ -134,6 +183,49 @@ export class Game {
     }
     if (hazardEvents.coneHit) {
       this.audio.click();
+    }
+    if (hazardEvents.speedBreakerHit) {
+      try {
+        if (hazardEvents.speedBreakerHarsh) {
+          // Harsh crossing: speed reduced for 2.5 seconds (2-3 seconds)
+          this.speedBreakerTimer = config.speedBreaker?.duration || 2.5;
+          this.speedBreakerTotal = this.speedBreakerTimer;
+          this.speedBreakerPenalty = true;
+
+          // Immediate sharp reduction in speed down to reducedSpeed (~40-45 km/h)
+          const reducedSpeed = config.speedBreaker?.reducedSpeed || 16;
+          this.speed = Math.min(this.speed, reducedSpeed);
+
+          // Cancel and lockout nitro during penalty
+          this.player.nitroActive = false;
+          if (this.player.setFlames) this.player.setFlames(false);
+          this.player.lockout = Math.max(this.player.lockout || 0, this.speedBreakerTimer);
+
+          // Suspension bounce & thump sound
+          if (this.player.applySpeedBreakerBump) this.player.applySpeedBreakerBump(1.0);
+          if (this.audio.speedBreakerThud) this.audio.speedBreakerThud(1.0);
+          this.shake = 0.38 * (getSettings().screenShake || 1.0);
+
+          if (this.ui.showHazardAlert) this.ui.showHazardAlert('SPEED BREAKER HIT! SPEED REDUCED (2.5s)', 'danger');
+          if (this.ui.spawnPopup) this.ui.spawnPopup('-SPEED BUMP!', this.player.x, 'loss');
+          if (this.ui.updateSpeedBreakerPenalty) this.ui.updateSpeedBreakerPenalty(this.speedBreakerTimer, this.speedBreakerTotal);
+        } else {
+          // Smooth crossing: player slowed down appropriately before crossing
+          this.speedBreakerTimer = 0.8;
+          this.speedBreakerTotal = 0.8;
+          this.speedBreakerPenalty = false;
+
+          if (this.player.applySpeedBreakerBump) this.player.applySpeedBreakerBump(0.4);
+          if (this.audio.speedBreakerThud) this.audio.speedBreakerThud(0.45);
+          this.shake = 0.12 * (getSettings().screenShake || 1.0);
+
+          if (this.ui.showHazardAlert) this.ui.showHazardAlert('SMOOTH SPEED BREAKER PASS! GOOD BRAKING', 'normal');
+          if (this.ui.spawnPopup) this.ui.spawnPopup('+50 SMOOTH BUMP', this.player.x, 'bonus');
+          this.score += 50;
+        }
+      } catch (err) {
+        console.error('Speed breaker event error:', err);
+      }
     }
     if (hazardEvents.crashed) {
       this._beginCrash();
@@ -218,6 +310,9 @@ export class Game {
   _beginCrash() {
     this.state = 'CRASHING';
     this.crashT = 0;
+    this.speedBreakerTimer = 0;
+    this.speedBreakerPenalty = false;
+    this.ui.clearSpeedBreakerPenalty();
     this.slowSpeed = this.speed * (this.player.nitroActive ? config.nitroMultiplier : 1);
     this.shake = config.camera.shakeCrash * (getSettings().screenShake || 1.0);
     this.player.nitroActive = false;
@@ -275,6 +370,9 @@ export class Game {
     this.score = 0;
     this.distance = 0;
     this.speed = config.baseSpeed;
+    this.speedBreakerTimer = 0;
+    this.speedBreakerPenalty = false;
+    this.ui.clearSpeedBreakerPenalty();
     this.lastScoreBucket = 0;
     this.crashT = 0;
     this.shake = 0;

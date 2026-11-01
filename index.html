@@ -56,6 +56,18 @@
           <span id="hazard-text">POLICE PURSUIT IN PROGRESS</span>
         </div>
 
+        <!-- Speed Breaker Slowdown Penalty Badge -->
+        <div id="speed-breaker-badge" class="speed-breaker-badge hidden">
+          <div class="sb-header">
+            <span class="sb-icon">⚠️</span>
+            <span id="sb-title" class="sb-title">SPEED REDUCED</span>
+            <span id="sb-timer" class="sb-timer">2.5s</span>
+          </div>
+          <div class="sb-bar-wrap">
+            <div id="sb-bar" class="sb-bar"></div>
+          </div>
+        </div>
+
         <!-- Nitro Energy Bar at Bottom -->
         <div class="nitro-wrap">
           <div class="nitro-label-row">
@@ -171,6 +183,20 @@
             <div class="section-title">SELECT YOUR REAL CAR</div>
             <div id="garage-cards" class="garage-cards">
               <!-- Dynamically populated or rendered -->
+            </div>
+            <div class="color-picker-row">
+              <span class="setting-label">CUSTOM CAR PAINT COLOR</span>
+              <div id="car-color-palette" class="car-color-palette">
+                <button class="color-chip factory-chip" data-color="default" title="Factory OEM Livery">OEM</button>
+                <button class="color-chip" data-color="0xef1122" style="background:#ef1122" title="Rosso Corsa Red"></button>
+                <button class="color-chip" data-color="0xffc300" style="background:#ffc300" title="Giallo Modena Yellow"></button>
+                <button class="color-chip" data-color="0x10d860" style="background:#10d860" title="Verde Mantis Green"></button>
+                <button class="color-chip" data-color="0x00c8ff" style="background:#00c8ff" title="Miami Blue Cyan"></button>
+                <button class="color-chip" data-color="0x9333ea" style="background:#9333ea" title="Ultraviolet Purple"></button>
+                <button class="color-chip" data-color="0xff6600" style="background:#ff6600" title="Arancio Sunset Orange"></button>
+                <button class="color-chip" data-color="0xf8fafc" style="background:#f8fafc" title="Bianco Pure White"></button>
+                <button class="color-chip" data-color="0x1e293b" style="background:#1e293b" title="Nero Metallic Black"></button>
+              </div>
             </div>
           </div>
 

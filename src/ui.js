@@ -2,9 +2,10 @@ import { config } from './config.js';
 import { getSettings, saveSettings } from './storage.js';
 
 export class UI {
-  constructor(onCarSelect, onSettingsChange) {
+  constructor(onCarSelect, onSettingsChange, onColorSelect) {
     this.onCarSelect = onCarSelect;
     this.onSettingsChange = onSettingsChange;
+    this.onColorSelect = onColorSelect;
 
     this.hud = document.getElementById('hud');
     this.overlay = document.getElementById('overlay');
@@ -38,6 +39,10 @@ export class UI {
     this.hazardText = document.getElementById('hazard-text');
     this.hazardTimer = null;
     this.hudDiff = document.getElementById('hud-difficulty');
+
+    this.sbBadge = document.getElementById('speed-breaker-badge');
+    this.sbTimer = document.getElementById('sb-timer');
+    this.sbBar = document.getElementById('sb-bar');
 
     this.popups = document.getElementById('popups');
     this.flash = document.getElementById('flash');
@@ -80,6 +85,32 @@ export class UI {
 
     // Populate Garage Cards
     this._renderGarageCards(s.selectedCar);
+
+    // Populate Custom Car Paint Palette
+    const paletteContainer = document.getElementById('car-color-palette');
+    if (paletteContainer) {
+      const chips = paletteContainer.querySelectorAll('.color-chip');
+      const activeColor = s.customColorHex;
+      chips.forEach((chip) => {
+        const colorAttr = chip.getAttribute('data-color');
+        const chipColor = colorAttr === 'default' ? null : Number(colorAttr);
+        if (
+          (activeColor === null && colorAttr === 'default') ||
+          (activeColor !== null && chipColor === activeColor)
+        ) {
+          chip.classList.add('active');
+        }
+        chip.addEventListener('click', (e) => {
+          e.stopPropagation();
+          chips.forEach((c) => c.classList.remove('active'));
+          chip.classList.add('active');
+          this._updateSetting('customColorHex', chipColor);
+          if (this.onColorSelect) {
+            this.onColorSelect(chipColor);
+          }
+        });
+      });
+    }
 
     // Populate Settings Controls
     if (this.sliderSens) {
@@ -330,6 +361,15 @@ export class UI {
     window.setTimeout(() => el.remove(), 950);
   }
 
+  spawnPopup(text, x = 0, type = 'normal') {
+    if (!this.popups) return;
+    const el = document.createElement('div');
+    el.className = `popup popup-${type}`;
+    el.textContent = text;
+    this.popups.appendChild(el);
+    window.setTimeout(() => el.remove(), 950);
+  }
+
   showHazardAlert(text, type = 'danger') {
     this.hazardBanner.classList.remove('hidden');
     this.hazardText.textContent = text;
@@ -341,6 +381,24 @@ export class UI {
 
   hideHazardAlert() {
     this.hazardBanner.classList.add('hidden');
+  }
+
+  updateSpeedBreakerPenalty(remainingSec, totalSec) {
+    if (!this.sbBadge) return;
+    this.sbBadge.classList.remove('hidden');
+    if (this.sbTimer) {
+      this.sbTimer.textContent = `${Math.max(0, remainingSec).toFixed(1)}s`;
+    }
+    if (this.sbBar) {
+      const p = Math.max(0, Math.min(1, remainingSec / totalSec));
+      this.sbBar.style.transform = `scaleX(${p})`;
+    }
+  }
+
+  clearSpeedBreakerPenalty() {
+    if (this.sbBadge) {
+      this.sbBadge.classList.add('hidden');
+    }
   }
 
   crashFlash(on) {

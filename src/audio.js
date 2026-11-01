@@ -123,6 +123,69 @@ export class AudioSystem {
     this._tone(554, 0.22, 'sawtooth', 0.045, 1600);
   }
 
+  speedBreakerThud(harshness = 1.0) {
+    if (!this.ctx || !this.started || this.muted) return;
+    try {
+      const now = this.ctx.currentTime;
+      const masterGain = this.master;
+
+      const playAxleThud = (delay, pitch, volume) => {
+        try {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          const filter = this.ctx.createBiquadFilter();
+
+          filter.type = 'lowpass';
+          filter.frequency.setValueAtTime(260, now + delay);
+          filter.frequency.exponentialRampToValueAtTime(45, now + delay + 0.16);
+
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(pitch, now + delay);
+          osc.frequency.exponentialRampToValueAtTime(28, now + delay + 0.16);
+
+          gain.gain.setValueAtTime(0.001, now + delay);
+          gain.gain.linearRampToValueAtTime(Math.min(0.35, 0.2 * volume * harshness), now + delay + 0.015);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.18);
+
+          if (this.noise) {
+            const noiseSrc = this.ctx.createBufferSource();
+            noiseSrc.buffer = this.noise;
+            const nFilter = this.ctx.createBiquadFilter();
+            nFilter.type = 'bandpass';
+            nFilter.frequency.setValueAtTime(320, now + delay);
+            nFilter.Q.setValueAtTime(2.0, now + delay);
+
+            const nGain = this.ctx.createGain();
+            nGain.gain.setValueAtTime(0.12 * harshness, now + delay);
+            nGain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.08);
+
+            noiseSrc.connect(nFilter);
+            nFilter.connect(nGain);
+            nGain.connect(masterGain);
+            noiseSrc.start(now + delay);
+            noiseSrc.stop(now + delay + 0.09);
+          }
+
+          osc.connect(filter);
+          filter.connect(gain);
+          gain.connect(masterGain);
+
+          osc.start(now + delay);
+          osc.stop(now + delay + 0.2);
+        } catch {
+          // Audio safety
+        }
+      };
+
+      // Front axle thump
+      playAxleThud(0, 95, 1.0);
+      // Rear axle thump
+      playAxleThud(0.12, 80, 0.85);
+    } catch {
+      // Audio safety
+    }
+  }
+
   blinkerTick() {
     const now = performance.now();
     if (now - this.lastBlinkerTime < 180) return;

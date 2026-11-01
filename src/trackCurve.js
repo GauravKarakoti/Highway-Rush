@@ -62,28 +62,27 @@ export class TrackCurve {
    * At z = 0 (player position), offset is exactly 0.
    */
   getCurveOffset(z) {
-    if (z > 2) return 0;
+    if (z >= 0) return 0;
     // Quadratic curvature offset into the distance
     const distZ = Math.min(0, z);
-    return this.curvature * (distZ * distZ * 0.00014);
+    return this.curvature * (distZ * distZ * 0.000085);
   }
 
   /**
-   * Elevation Y offset for rolling hills.
+   * Elevation Y offset.
+   * Kept flat (0) so the road never elevates, clips, or overlaps cars or camera.
    */
   getHillOffset(z) {
-    if (z > 2) return 0;
-    const distZ = Math.min(0, z);
-    return this.elevation * Math.sin(-distZ * 0.022 + this.travelDistance * 0.012) * 1.2;
+    return 0;
   }
 
   /**
    * Tangent yaw angle (in radians) along the curve.
    */
   getCurveYaw(z) {
-    if (z > 2) return 0;
+    if (z >= 0) return 0;
     const distZ = Math.min(0, z);
-    return this.curvature * (2.0 * distZ * 0.00014);
+    return this.curvature * (2.0 * distZ * 0.000085);
   }
 
   /**

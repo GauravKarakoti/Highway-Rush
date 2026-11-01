@@ -52,6 +52,15 @@ export const config = {
 
   crashDuration: 1.0,
 
+  // Speed Breaker mechanics
+  speedBreaker: {
+    duration: 2.5, // 2-3 seconds speed reduction penalty
+    reducedSpeed: 16.0, // Reduced speed cap during penalty (~45 km/h)
+    safeCrossingSpeed: 22.0, // Below this speed + braking, crossing is smooth
+    bumpHeight: 0.16,
+    bumpDepth: 1.5,
+  },
+
   // Difficulty presets
   difficulties: {
     NORMAL: {
@@ -67,6 +76,7 @@ export const config = {
       constructionInterval: 38,
       oilSlickInterval: 30,
       policeInterval: 32,
+      speedBreakerInterval: 24,
       densityMul: 1.0,
       description: 'Classic arcade cruise. Steady traffic flow and wide passing opportunities.',
     },
@@ -83,6 +93,7 @@ export const config = {
       constructionInterval: 22,
       oilSlickInterval: 18,
       policeInterval: 20,
+      speedBreakerInterval: 18,
       densityMul: 1.35,
       description: 'Fast & demanding. Rapid lane-cutters, sudden brake checks, and construction chicanes.',
     },
@@ -99,6 +110,7 @@ export const config = {
       constructionInterval: 15,
       oilSlickInterval: 12,
       policeInterval: 14,
+      speedBreakerInterval: 14,
       densityMul: 1.7,
       description: 'Maximum adrenaline! Relentless traffic swarms, slick oil patches, and high-speed pursuits.',
     },
@@ -240,7 +252,6 @@ export function laneX(lane) {
   return (lane - (config.lanes - 1) / 2) * config.laneWidth;
 }
 
-/** Applies difficulty settings */
 export function applyDifficulty(diffKey = 'PRO') {
   const d = config.difficulties[diffKey] || config.difficulties.PRO;
   config.activeDifficulty = d;
@@ -253,6 +264,9 @@ export function applyDifficulty(diffKey = 'PRO') {
   config.traffic.policeSpawnInterval = d.policeInterval;
   return d;
 }
+
+// Attach to config object so config.applyDifficulty() works everywhere
+config.applyDifficulty = applyDifficulty;
 
 // Initialize with PRO as default
 applyDifficulty('PRO');
